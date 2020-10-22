@@ -1,0 +1,405 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: AWS CloudFormation template to create a new ECS Fargate First Run stack
+Parameters:
+  ECRRepositoryUri:
+    Description: Where this pipeline should store built artifacts
+    Type: String
+  ECRImageTag:
+    Description: Where this pipeline should store built artifacts
+    Type: String
+  TaskCount:
+    Description: How many tasks to start
+    Type: Number
+  StageName:
+    Description: Name the stage
+    Type: String
+
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.76.0.0/16
+      EnableDnsSupport: 'true'
+      EnableDnsHostnames: 'true'
+      Tags:
+      - Key: Name
+        Value: !Sub '${AWS::StackName}-vpc'
+        
+  PlumberApiSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: allow connections from specified CIDR ranges
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+      - IpProtocol: -1
+        CidrIp: 10.76.3.0/24
+      - IpProtocol: tcp
+        FromPort: 8000
+        ToPort: 8000
+        CidrIp: 10.76.0.0/16
+
+  VpcEndpointSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow VPCEndpoints ingress on 443
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        CidrIp: 0.0.0.0/0
+
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: us-east-1d
+      CidrBlock: 10.76.3.0/24
+      VpcId:
+        Ref: VPC
+      Tags:
+      - Key: Name
+        Value: !Sub '${AWS::StackName}-public-subnet'
+
+  PrivateSubnet0:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: us-east-1a
+      CidrBlock: 10.76.0.0/24
+      VpcId:
+        Ref: VPC
+      Tags:
+      - Key: Name
+        Value: !Sub '${AWS::StackName}-private-subnet-0'
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: us-east-1b
+      CidrBlock: 10.76.1.0/24
+      VpcId:
+        Ref: VPC
+      Tags:
+      - Key: Name
+        Value: !Sub '${AWS::StackName}-private-subnet-1'
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: us-east-1c
+      CidrBlock: 10.76.2.0/24
+      VpcId:
+        Ref: VPC
+      Tags:
+      - Key: Name
+        Value: !Sub '${AWS::StackName}-private-subnet-2'
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+      - Key: Name
+        Value: !Sub '${AWS::StackName}-internet-gateway'
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet
+      RouteTableId: !Ref PublicRouteTable
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+
+  PrivateSubnetRouteTableAssociation0:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet0
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnetRouteTableAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnetRouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable
+
+  EcrDkrVpcEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ecr.dkr'
+      VpcId: !Ref VPC
+      VpcEndpointType: Interface
+      SecurityGroupIds:
+        - !Ref VpcEndpointSecurityGroup
+      SubnetIds:
+        - !Ref PrivateSubnet0
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      PrivateDnsEnabled: true
+
+  EcrApiVpcEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ecr.api'
+      VpcId: !Ref VPC
+      VpcEndpointType: Interface
+      SecurityGroupIds:
+        - !Ref VpcEndpointSecurityGroup
+      SubnetIds:
+        - !Ref PrivateSubnet0
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      PrivateDnsEnabled: true
+
+  S3VpcEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.s3'
+      VpcId: !Ref VPC
+      VpcEndpointType: Gateway
+      RouteTableIds:
+        - !Ref PrivateRouteTable
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal: '*'
+            Action:
+              - 's3:GetObject'
+            Resource:
+              - !Sub 'arn:aws:s3:::prod-${AWS::Region}-starport-layer-bucket/*'
+
+  LogsVpcEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.logs'
+      VpcId: !Ref VPC
+      VpcEndpointType: Interface
+      SecurityGroupIds:
+        - !Ref VpcEndpointSecurityGroup
+      SubnetIds:
+        - !Ref PrivateSubnet0
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      PrivateDnsEnabled: true
+
+  PlumberApiECSServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Action: sts:AssumeRole
+          Effect: Allow
+          Principal:
+            Service: ecs-tasks.amazonaws.com
+      Path: /
+
+  PlumberApiECSCluster:
+    Type: AWS::ECS::Cluster
+
+  PlumberApiNetworkLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties: 
+      IpAddressType: ipv4
+      # LoadBalancerAttributes: 
+      #   - LoadBalancerAttribute
+      Scheme: internal
+      # SecurityGroups: 
+      #   - String
+      Subnets: 
+        - !Ref PrivateSubnet0
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      Type: network
+
+  PlumberApiNLBTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties: 
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 10
+      HealthyThresholdCount: 3
+      Protocol: TCP
+      Port: 8000
+      # Tags: 
+      #   - Tag
+      TargetType: ip
+      # UnhealthyThresholdCount: Integer
+      VpcId: !Ref VPC
+
+  PlumberApiNLBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties: 
+      DefaultActions: 
+        - Type: forward
+          TargetGroupArn: !Ref PlumberApiNLBTargetGroup
+      LoadBalancerArn: !Ref PlumberApiNetworkLoadBalancer
+      Port: 80
+      Protocol: TCP
+
+  PlumberApiTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties: 
+      RequiresCompatibilities: 
+        - 'FARGATE'
+      ContainerDefinitions: 
+        - Name: !Join ['-', [!Ref 'AWS::StackName', 'Container']]
+          Image: !Sub '${ECRRepositoryUri}:${ECRImageTag}'
+          PortMappings:
+            - ContainerPort: 8000
+          Essential: 'true'
+          LogConfiguration:
+            LogDriver: 'awslogs'
+            Options:
+              awslogs-group: !Sub '/ecs/${AWS::StackName}' # causing failure to start. create in advance?
+              awslogs-region: !Sub '${AWS::Region}'
+              awslogs-stream-prefix: 'ecs'
+#          Environment:
+#            - Name: AWS_KINESIS_STREAM
+#              Value: !Sub 'SwimIngestKinesisStreamSTDDS'
+#          Secrets:
+#            - Name: SWIM_JNDI_CONTEXT_FACTORY
+#              ValueFrom: !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/poc/swim/stdds/smes/jndi/context_factory'
+      TaskRoleArn: !Ref PlumberApiECSServiceRole
+      ExecutionRoleArn: !Ref PlumberApiECSServiceRole
+      Memory: '1 GB'
+      Cpu: '0.25 vCPU'
+      Family: !Sub '${AWS::StackName}'
+      NetworkMode: 'awsvpc'
+
+  PlumberApiService:
+    Type: AWS::ECS::Service
+    DependsOn: PlumberApiNLBListener
+    Properties: 
+      Cluster: !Ref PlumberApiECSCluster
+      LaunchType: 'FARGATE'
+      PlatformVersion: 1.4.0
+      TaskDefinition: !Ref PlumberApiTaskDefinition
+      ServiceName: !Sub 'plumber-api-service'
+      DesiredCount: !Ref TaskCount
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 100
+      DeploymentController: 
+        Type: 'ECS'
+      NetworkConfiguration: 
+        AwsvpcConfiguration:
+          AssignPublicIp: 'DISABLED'
+          Subnets: 
+            - !Ref PrivateSubnet0
+            - !Ref PrivateSubnet1
+            - !Ref PrivateSubnet2
+          SecurityGroups: 
+            - !Ref PlumberApiSecurityGroup            
+      LoadBalancers:
+        - TargetGroupArn:
+            Ref: PlumberApiNLBTargetGroup
+          ContainerPort: 8000
+          ContainerName: !Join ['-', [!Ref 'AWS::StackName', 'Container']]
+
+  PlumberRestApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Join ['-', [!Ref 'AWS::StackName', 'Api']]
+      Description: !Join ['-', [!Ref 'AWS::StackName', 'Api']]
+      EndpointConfiguration:
+        Types: 
+          - REGIONAL
+
+  PlumberRestApiVpcLink:
+      Type: AWS::ApiGateway::VpcLink
+      Properties:
+          Description: !Join ['-', [!Ref 'AWS::StackName', 'VpcLink']]
+          Name: !Join ['-', [!Ref 'AWS::StackName', 'VpcLink']]
+          TargetArns:
+              - !Ref PlumberApiNetworkLoadBalancer
+
+  TemperaturesResource:
+    Type: AWS::ApiGateway::Resource
+    Properties: 
+      ParentId: !GetAtt PlumberRestApi.RootResourceId
+      PathPart: temperatures
+      RestApiId: !Ref PlumberRestApi
+
+  TemperaturesMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref PlumberRestApi
+      ResourceId: !Ref TemperaturesResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: HTTP_PROXY
+        IntegrationHttpMethod: GET
+        ConnectionType: VPC_LINK
+        ConnectionId: !Ref PlumberRestApiVpcLink
+        Uri: !Sub http://${PlumberApiNetworkLoadBalancer.DNSName}/temperatures
+
+  HostnameResource:
+    Type: AWS::ApiGateway::Resource
+    Properties: 
+      ParentId: !GetAtt PlumberRestApi.RootResourceId
+      PathPart: hostname
+      RestApiId: !Ref PlumberRestApi
+
+  HostnameMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref PlumberRestApi
+      ResourceId: !Ref HostnameResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: HTTP_PROXY
+        IntegrationHttpMethod: GET
+        ConnectionType: VPC_LINK
+        ConnectionId: !Ref PlumberRestApiVpcLink
+        Uri: !Sub http://${PlumberApiNetworkLoadBalancer.DNSName}/hostname
+
+  PlumberApiStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      RestApiId: !Ref PlumberRestApi
+      DeploymentId: !Ref PlumberApiDeployment
+      StageName: !Ref StageName
+
+  PlumberApiDeployment:
+    Type: "AWS::ApiGateway::Deployment"
+    DependsOn: HostnameMethod
+    Properties:
+      RestApiId: !Ref PlumberRestApi
+      StageName: 'DummyStage'
+
+Outputs:
+
+  PublicApiUrl:
+    Value: !Sub https://${PlumberRestApi}.execute-api.${AWS::Region}.amazonaws.com/${PlumberApiStage}
+    Export:
+      Name: !Sub ${AWS::StackName}-PublicApiUrl

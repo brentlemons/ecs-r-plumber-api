@@ -1,0 +1,16 @@
+Package: Playground
+Type: Package
+Title: The Playground API
+Version: 0.0.1
+Author: Brent Lemons
+Maintainer: Brent Lemons <lembrent@amazon.com>
+Description: The Playground API.
+License: GPL-3
+Encoding: UTF-8
+LazyData: true
+Imports:
+    plumber,
+    jsonlite
+Suggests:
+    testthat (>= 2.1.0)
+RoxygenNote: 7.0.2
