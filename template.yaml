@@ -341,47 +341,89 @@ Resources:
           TargetArns:
               - !Ref PlumberApiNetworkLoadBalancer
 
-  TemperaturesResource:
+  AdditionResource:
     Type: AWS::ApiGateway::Resource
     Properties: 
       ParentId: !GetAtt PlumberRestApi.RootResourceId
-      PathPart: temperatures
+      PathPart: add
       RestApiId: !Ref PlumberRestApi
 
-  TemperaturesMethod:
+  AdditionMethod:
     Type: AWS::ApiGateway::Method
     Properties:
       RestApiId: !Ref PlumberRestApi
-      ResourceId: !Ref TemperaturesResource
-      HttpMethod: GET
+      ResourceId: !Ref AdditionResource
+      HttpMethod: POST
       AuthorizationType: NONE
       Integration:
         Type: HTTP_PROXY
-        IntegrationHttpMethod: GET
+        IntegrationHttpMethod: POST
         ConnectionType: VPC_LINK
         ConnectionId: !Ref PlumberRestApiVpcLink
-        Uri: !Sub http://${PlumberApiNetworkLoadBalancer.DNSName}/temperatures
-
-  HostnameResource:
+        Uri: !Sub http://${PlumberApiNetworkLoadBalancer.DNSName}/add
+            
+  SubtractionResource:
     Type: AWS::ApiGateway::Resource
     Properties: 
       ParentId: !GetAtt PlumberRestApi.RootResourceId
-      PathPart: hostname
+      PathPart: subtract
       RestApiId: !Ref PlumberRestApi
 
-  HostnameMethod:
+  SubtractionMethod:
     Type: AWS::ApiGateway::Method
     Properties:
       RestApiId: !Ref PlumberRestApi
-      ResourceId: !Ref HostnameResource
-      HttpMethod: GET
+      ResourceId: !Ref SubtractionResource
+      HttpMethod: POST
       AuthorizationType: NONE
       Integration:
         Type: HTTP_PROXY
-        IntegrationHttpMethod: GET
+        IntegrationHttpMethod: POST
         ConnectionType: VPC_LINK
         ConnectionId: !Ref PlumberRestApiVpcLink
-        Uri: !Sub http://${PlumberApiNetworkLoadBalancer.DNSName}/hostname
+        Uri: !Sub http://${PlumberApiNetworkLoadBalancer.DNSName}/subtract
+                        
+  MultiplicationResource:
+    Type: AWS::ApiGateway::Resource
+    Properties: 
+      ParentId: !GetAtt PlumberRestApi.RootResourceId
+      PathPart: multiply
+      RestApiId: !Ref PlumberRestApi
+
+  MultiplicationMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref PlumberRestApi
+      ResourceId: !Ref MultiplicationResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: HTTP_PROXY
+        IntegrationHttpMethod: POST
+        ConnectionType: VPC_LINK
+        ConnectionId: !Ref PlumberRestApiVpcLink
+        Uri: !Sub http://${PlumberApiNetworkLoadBalancer.DNSName}/multiply
+                              
+  DivisionResource:
+    Type: AWS::ApiGateway::Resource
+    Properties: 
+      ParentId: !GetAtt PlumberRestApi.RootResourceId
+      PathPart: divide
+      RestApiId: !Ref PlumberRestApi
+
+  DivisionMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref PlumberRestApi
+      ResourceId: !Ref DivisionResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: HTTP_PROXY
+        IntegrationHttpMethod: POST
+        ConnectionType: VPC_LINK
+        ConnectionId: !Ref PlumberRestApiVpcLink
+        Uri: !Sub http://${PlumberApiNetworkLoadBalancer.DNSName}/divide
 
   PlumberApiStage:
     Type: AWS::ApiGateway::Stage
@@ -392,7 +434,7 @@ Resources:
 
   PlumberApiDeployment:
     Type: "AWS::ApiGateway::Deployment"
-    DependsOn: HostnameMethod
+    DependsOn: DivisionMethod
     Properties:
       RestApiId: !Ref PlumberRestApi
       StageName: 'DummyStage'
