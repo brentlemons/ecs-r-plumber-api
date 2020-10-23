@@ -50,4 +50,4 @@ aws cloudformation deploy \
 ```
 
 ## Architecture CloudFormation builds
-<img src="./docs/architecture.png" width="600">
+![Plumber on ECS Architecture](./docs/architecture.png)
