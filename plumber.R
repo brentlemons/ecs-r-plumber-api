@@ -3,21 +3,6 @@
 library(Playground)
 library("rjson")
 
-#* @options /echo
-#* @get /echo
-#* @param data:character 
-#* @response 200 Return successful
-#* @response 500 Bad input
-#* @response default Return successful
-function(data) {
-  
-  # Extract the portfolio data
-  out = paste0("You said: ", data)
-  
-  return(out)
-  
-}
-
 #* @serializer unboxedJSON
 #* @get /temperatures
 function() {
@@ -48,7 +33,7 @@ function() {
 #* @post /add
 function(a, b) {
 
-  sum = Playground::addition(a, b)
+  sum <- Playground::addition(a, b)
   return(
     list(a=a, b=b, sum=sum)
   )
@@ -60,9 +45,9 @@ function(a, b) {
 #* @post /subtract
 function(a, b) {
 
-  out = as.numeric(a) - as.numeric(b)
+  diff <- Playground::subtract(a, b)
   return(
-    list(a=a, b=b, diff=out)
+    list(a=a, b=b, diff=diff)
   )
   
 }
@@ -72,9 +57,9 @@ function(a, b) {
 #* @post /multiply
 function(a, b) {
 
-  out = as.numeric(a) * as.numeric(b)
+  product <- Playground::multiply(a, b)
   return(
-    list(a=a, b=b, product=out)
+    list(a=a, b=b, product=product)
   )
 
 }
@@ -84,9 +69,9 @@ function(a, b) {
 #* @post /divide
 function(a, b) {
 
-  out = as.numeric(a) / as.numeric(b)
+  dividend <- Playground::divide(a, b)
   return(
-    list(a=a, b=b, dividend=out)
+    list(a=a, b=b, dividend=dividend)
   )
   
 }

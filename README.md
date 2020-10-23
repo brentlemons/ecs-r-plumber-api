@@ -11,3 +11,6 @@ A repo to prototype the fng api env.
 1. automate infrastructure into k8s (cloudformation)
 2. improve project structure (packages)
 3. automate ci (circleci)
+
+# Architecture
+![Plumber on ECS Architecture](./docs/architecture.png)
